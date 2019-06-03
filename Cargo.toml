@@ -1,0 +1,11 @@
+[package]
+name = "brainfuck"
+version = "0.1.0"
+authors = ["Francois Pigerre <fpigerre@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+
+[[bin]]
+name = "brainfuck"
+path = "src/main.rs"
