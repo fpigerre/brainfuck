@@ -3,7 +3,7 @@ Brainfuck Interpreter
 
 A simple brainfuck interpreter in Rust.
 
-* Roadmap:
+### Roadmap:
 
 1. Working interpreter
 2. Working compiler
