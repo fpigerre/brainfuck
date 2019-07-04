@@ -12,6 +12,7 @@ use std::convert::TryFrom;
 
 pub mod instruction;
 use instruction::Instruction;
+use core::borrow::Borrow;
 
 struct Program {
     cells: Vec<u8>,
@@ -19,10 +20,15 @@ struct Program {
     byte_iterator: Bytes<BufReader<File>>
 }
 
+enum Sequence {
+    Sequence,
+    Vec(Instruction)
+}
+
 // TODO: Yes, I know I'm forcing myself to use OOP for Rust
 // Yes, I will eventually redesign this and make it less OOP and more functional/data-oriented
 impl Program {
-    fn interpret_instruction(&mut self, instruction: instruction::Instruction) {
+    fn interpret_instruction(&mut self, instruction: Instruction) {
         use Instruction::*;
         match instruction {
             IncrementPointer => self.increment_pointer(),
@@ -39,44 +45,108 @@ impl Program {
     fn interpret_sequence(&mut self, sequence: Vec<Instruction>) {
         use Instruction::*;
 
-        for instruction in sequence {
+        let mut sequence_iterator = sequence.iter();
+        let test = sequence_iterator.next();
+
+        loop {
+            let instruction = match sequence_iterator.next() {
+                Some(valid_instruction) => valid_instruction.borrow(),
+                None => { println!("Iteration finished"); break } // TODO: Handle iteration finished
+            };
+
             match instruction {
-                JumpForward => {},
-                JumpBackward => {},
+                JumpForward => {
+                    let byte_value = self.cells[self.data_pointer];
+
+                    // Jump if the byte at the data pointer is zero
+                    if byte_value == 0 {
+                        // Jump to matching ] (closed bracket)
+                        let mut nested = 0;
+                        loop {
+                            match sequence_iterator.next() {
+                                Some(valid_instruction) => {
+                                    match valid_instruction {
+                                        // A nested loop has been reached
+                                        JumpForward => nested += 1,
+                                        // The end of a loop has been reached
+                                        JumpBackward => {
+                                            // Check whether loop is nested
+                                            if nested != 0 {
+                                                nested -= 1
+                                            } else {
+                                                break;
+                                            }
+                                        },
+                                        _ => continue
+                                    }
+                                },
+                                None => { panic!("No matching ]") }
+                            };
+                        }
+                    } else {
+                        continue;
+                    }
+                },
+                JumpBackward => {
+                    let byte_value = self.cells[self.data_pointer];
+
+                    // Jump if the byte at the data pointer is non-zero
+                    if byte_value != 0 {
+                        // TODO: Jump backwards to matching [
+                        loop {
+                            sequence_iterator.rev();
+                        }
+                    } else {
+                        continue;
+                    }
+                },
                 _ => self.interpret_instruction(instruction)
             }
         }
     }
 
-    /// Recursively builds a sequence of matching bracket pairs
+    /// Recursively builds a sequence
     /// A sequence is a set of instructions between a matching bracket pair
+    /// hold_sequence makes no guarantees about the contents of the sequence, only that
+    /// the sequence occurs between a matching bracket pair
     fn hold_sequence(&mut self) -> Vec<Instruction> {
         let mut sequence : Vec<Instruction> = Vec::new();
 
         loop {
-            let byte = self.byte_iterator.next();
+            let byte = match self.byte_iterator.next() {
+                Some(some_byte) => some_byte,
+                None => { println!("Iteration finished"); break } // TODO: Handle iteration finished
+            };
 
             match byte {
-                Some(valid_byte) => {
-                    let instruction: Instruction = match Instruction::try_from(valid_byte.unwrap()) {
+                Ok(valid_byte) => {
+                    let instruction: Instruction = match Instruction::try_from(valid_byte) {
                         Ok(valid_instruction) => valid_instruction,
+                        // TODO: Handle invalid instruction
                         Err(e) => { println!("Recovering error: {}", e); continue }
                     };
 
                     match instruction {
                         Instruction::JumpForward => {
+                            sequence.push(instruction);
                             let mut sub_sequence = self.hold_sequence();
                             sequence.append(&mut sub_sequence);
                         },
-                        Instruction::JumpBackward => break,
+                        Instruction::JumpBackward => {
+                            sequence.push(instruction);
+                            break;
+                        },
                         _ => sequence.push(instruction)
                     }
-                },
-                None => println!("Invalid byte value in sequence")
+                }
+
+                Err(e) => {
+                    // TODO: Handle BufReader not returning a valid byte
+                }
             }
         }
 
-        sequence
+        return sequence
     }
 
     fn increment_pointer(&mut self) {
@@ -117,7 +187,7 @@ impl Program {
         // 3. Perform operation using sequence
 
         let byte_value = self.cells[self.data_pointer];
-        let mut instruction_sequence : Vec<Instruction> = Vec::new();
+        let mut instruction_sequence : Vec<Instruction> = self.hold_sequence();
 
         // Perform operations if necessary or ignore sequence
         if byte_value != 0 {
@@ -131,6 +201,9 @@ impl Program {
         // jump it back to the command after the matching [ command.
 
         // Two options, either we're in a sequence, or no matching [
+
+        // This function should never be called outside a sequence
+        panic!("No matching \"[\" open bracket!")
     }
 }
 
@@ -158,8 +231,6 @@ fn main() -> std::io::Result<()> {
 }
 
 fn interpret_program(program: &mut Program) {
-    use instruction::Instruction;
-
     loop {
         let byte = program.byte_iterator.next();
 
