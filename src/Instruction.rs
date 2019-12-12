@@ -9,6 +9,7 @@ const ACCEPT_INPUT: u8 = 0x2C;
 const JUMP_FORWARD: u8 = 0x5B;
 const JUMP_BACKWARD: u8 = 0x5D;
 
+/// A simple enum describing available brainfuck instructions
 pub enum Instruction {
     IncrementPointer = INCREMENT_POINTER as isize,
     DecrementPointer = DECREMENT_POINTER as isize,
@@ -20,6 +21,7 @@ pub enum Instruction {
     JumpBackward = JUMP_BACKWARD as isize
 }
 
+/// Implementation to convert hexadecimal values to enumerated Instruction values
 impl TryFrom<u8> for Instruction {
     type Error = &'static str;
 

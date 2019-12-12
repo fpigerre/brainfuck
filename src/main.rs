@@ -12,13 +12,16 @@ use std::io::{BufReader, Read, Write};
 
 use std::convert::TryFrom;
 
+/// The Sequence type represents a (possibly) nested sequence of instructions
 type Sequence = Vec<SequenceElement>;
 
+/// The SequenceElement enum is used to represent the types that may make up a Sequence
 enum SequenceElement {
     Instruction(Instruction),
     Sequence(Sequence)
 }
 
+/// The Program struct holds the current state of the program
 struct Program {
     cells: Vec<u8>,
     data_pointer: usize,
@@ -44,8 +47,10 @@ impl Program {
 
         match byte {
             Some(valid_byte) => {
+                // Check that the next instruction is valid
                 let instruction: Option<Instruction> = match Instruction::try_from(valid_byte.unwrap()) {
                     Ok(valid_instruction) => Some(valid_instruction),
+                    // Upon error, simply fetch the next instruction and continue
                     Err(e) => { println!("Recovering error: {}", e); self.fetch_instruction() }
                 };
 
@@ -83,17 +88,10 @@ impl Program {
                         _ => self.interpret_instruction(valid_instruction)
                     },
 
+                    // Recursively execute sequences, "unwrapping" until basic instructions are conditionally interpreted
                     SequenceElement::Sequence(parenthetic_sequence) => {
                         while self.cells[self.data_pointer] != 0 {
                             self.execute_sequence(&parenthetic_sequence);
-                            /*for element in parenthetic_sequence {
-                            // TODO: DRY and make recursive maybe?
-                            match element {
-                                JumpForward => panic!{"Error in sequence building process"},
-                                JumpBackward => panic!{"Error in sequence building process"},
-                                _ => self.interpret_instruction(element)
-                            }
-                        }*/
                         }
                     }
                 },

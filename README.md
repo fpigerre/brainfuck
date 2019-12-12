@@ -1,7 +1,7 @@
 Brainfuck Interpreter
 =====================
 
-A simple brainfuck interpreter in Rust.
+A simple [brainfuck](https://en.wikipedia.org/wiki/Brainfuck) interpreter written in [Rust](https://www.rust-lang.org/).
 
 ### Roadmap:
 
