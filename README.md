@@ -30,7 +30,7 @@ the value stored being zero
 1. Working interpreter
     - [x] Instructions modify program state correctly
     - [x] Sequences/while loops implemented correctly
-    - [] Cell array is of variable size
-    - [] Cell array wraps around
-    - [] Custom error types for underflow/overflow
+    - [ ] Cell array is of variable size
+    - [ ] Cell array wraps around
+    - [ ] Custom error types for underflow/overflow
 2. Working compiler
