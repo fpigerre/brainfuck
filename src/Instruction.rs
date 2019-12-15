@@ -22,13 +22,27 @@ pub enum Instruction {
     JumpBackward = JUMP_BACKWARD as isize
 }
 
-/// Format instructions for display using instruction names
+/// Format instructions for display using symbols
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
+        use Instruction::*;
+
+        let symbol = match self {
+            IncrementPointer => '>',
+            DecrementPointer => '<',
+            IncrementValue => '+',
+            DecrementValue => '-',
+            OutputValue => '.',
+            AcceptInput => ',',
+            JumpForward => '[',
+            JumpBackward => ']'
+        };
+
+        write!(f, "{}", symbol)
     }
 }
 
+/// For instructions for debugging using instruction names
 impl fmt::Debug for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Instruction::*;
