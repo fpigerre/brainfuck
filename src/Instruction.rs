@@ -1,3 +1,4 @@
+use std::fmt;
 use std::convert::TryFrom;
 
 const INCREMENT_POINTER: u8 = 0x3E;
@@ -19,6 +20,32 @@ pub enum Instruction {
     AcceptInput = ACCEPT_INPUT as isize,
     JumpForward = JUMP_FORWARD as isize,
     JumpBackward = JUMP_BACKWARD as isize
+}
+
+/// Format instructions for display using instruction names
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(self, f)
+    }
+}
+
+impl fmt::Debug for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use Instruction::*;
+
+        let instruction_name = match self {
+            IncrementPointer => "IncrementPointer",
+            DecrementPointer => "DecrementPointer",
+            IncrementValue => "IncrementValue",
+            DecrementValue => "DecrementValue",
+            OutputValue => "OutputValue",
+            AcceptInput => "AcceptInput",
+            JumpForward => "JumpForward",
+            JumpBackward => "JumpBackward"
+        };
+
+        write!(f, "{}", instruction_name)
+    }
 }
 
 /// Implementation to convert hexadecimal values to enumerated Instruction values

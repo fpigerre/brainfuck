@@ -1,16 +1,15 @@
-mod instruction;
+use std::convert::TryFrom;
+use std::env;
+use std::fs::File;
+use std::io;
+use std::io::{BufReader, Read};
+use std::io::Bytes;
+use std::path::Path;
+
 use instruction::Instruction;
 use instruction::Instruction::*;
 
-use std::env;
-use std::path::Path;
-use std::fs::File;
-
-use std::io;
-use std::io::Bytes;
-use std::io::{BufReader, Read, Write};
-
-use std::convert::TryFrom;
+mod instruction;
 
 /// The Sequence type represents a (possibly) nested sequence of instructions
 type Sequence = Vec<SequenceElement>;
@@ -18,14 +17,14 @@ type Sequence = Vec<SequenceElement>;
 /// The SequenceElement enum is used to represent the types that may make up a Sequence
 enum SequenceElement {
     Instruction(Instruction),
-    Sequence(Sequence)
+    Sequence(Sequence),
 }
 
 /// The Program struct holds the current state of the program
 struct Program {
     cells: Vec<u8>,
     data_pointer: usize,
-    byte_iterator: Bytes<BufReader<File>>
+    byte_iterator: Bytes<BufReader<File>>,
 }
 
 /// The Program implementation manages the state of the program.
@@ -51,12 +50,13 @@ impl Program {
                 let instruction: Option<Instruction> = match Instruction::try_from(valid_byte.unwrap()) {
                     Ok(valid_instruction) => Some(valid_instruction),
                     // Upon error, simply fetch the next instruction and continue
-                    Err(e) => { println!("Recovering error: {}", e); self.fetch_instruction() }
+                    Err(_) => self.fetch_instruction()
                 };
 
                 instruction
-            },
-            None => { println!("Compiling done!"); None }
+            }
+
+            None => None
         }
     }
 
@@ -65,17 +65,36 @@ impl Program {
         match instruction {
             IncrementPointer => self.increment_pointer(),
             DecrementPointer => self.decrement_pointer(),
-            IncrementValue => self.increment_value(),
-            DecrementValue => self.decrement_value(),
+            IncrementValue => {
+                self.initialize_cells();
+                self.increment_value()
+            },
+            DecrementValue => {
+                self.initialize_cells();
+                self.decrement_value()
+            },
             OutputValue => self.output_value(),
-            AcceptInput => self.accept_input(),
-            JumpForward => self.jump_forward(),
+            AcceptInput => {
+                self.initialize_cells();
+                self.accept_input()
+            },
+            JumpForward => {
+                self.initialize_cells();
+                self.jump_forward()
+            },
             JumpBackward => self.jump_backward()
         }
     }
 
+    /// Resize the cell array to the size of the data pointer and new cells to zero
+    fn initialize_cells(&mut self) {
+        if self.cells.len() < self.data_pointer + 1 {
+            self.cells.resize(self.data_pointer + 1, 0);
+        }
+    }
+
     /// Recursive method used to conditionally execute elements of a Sequence
-    fn execute_sequence(&mut self, sequence : &Sequence) {
+    fn execute_sequence(&mut self, sequence: &Sequence) {
         let mut sequence_iterator = sequence.iter();
 
         // TODO: Check recursive call can't be used instead of loop
@@ -85,7 +104,9 @@ impl Program {
                     SequenceElement::Instruction(valid_instruction) => match *valid_instruction {
                         JumpForward => panic! {"Error in sequence building process"},
                         JumpBackward => panic! {"Error in sequence building process"},
-                        _ => self.interpret_instruction(valid_instruction)
+                        _ => {
+                            self.interpret_instruction(valid_instruction)
+                        }
                     },
 
                     // Recursively execute sequences, "unwrapping" until basic instructions are conditionally interpreted
@@ -113,30 +134,44 @@ impl Program {
 
     /// Increment the byte at the data pointer by one (+)
     fn increment_value(&mut self) {
-        if self.cells.len() < self.data_pointer + 1 {
-            self.cells.resize(self.data_pointer + 1, 0);
-        }
-
         self.cells[self.data_pointer] += 1;
     }
 
     /// Decrement the byte at the data pointer by one (-)
     fn decrement_value(&mut self) {
-        if self.cells.len() < self.data_pointer + 1 {
-            self.cells.resize(self.data_pointer + 1, 0);
-        }
-
         self.cells[self.data_pointer] -= 1;
     }
 
     /// Output the byte at the data pointer (,)
     fn output_value(&mut self) {
-        io::stdout().write(&[self.cells[self.data_pointer]]).unwrap();
+        if self.cells.len() < self.data_pointer + 1 {
+            println!("{}", 0);
+        } else {
+            println!("{}", self.cells[self.data_pointer])
+            //io::stdout().write_all(&[self.cells[self.data_pointer]]).unwrap();
+        }
     }
 
     /// Accept one byte of input, storing its value in the byte at the data pointer (,)
     fn accept_input(&mut self) {
-        io::stdin().read(&mut [self.cells[self.data_pointer]]).unwrap();
+        // Read one line of input
+        let mut buffer = String::new();
+        io::stdin().read_line(&mut buffer).unwrap();
+
+        // Remove last character if it is one of LF, CR, next line or line separator
+        match buffer.chars().last() {
+            Some('\u{000A}') | Some('\u{000D}') | Some('\u{0085}') | Some('\u{2028}') => buffer.truncate(buffer.len() - 1),
+            _ => unreachable!()
+        }
+
+        // Parse input string as an unsigned 8-bit integer
+        match buffer.parse::<u8>() {
+            Ok(value) => self.cells[self.data_pointer] = value,
+            Err(_) => {
+                println!("An error occurred parsing input");
+                self.accept_input()
+            }
+        }
     }
 
     /// Recursively matches pairs
@@ -149,7 +184,7 @@ impl Program {
                         JumpBackward => return,
                         _ => continue
                     }
-                },
+                }
                 None => { panic!("No matching ]") }
             };
         }
@@ -157,20 +192,22 @@ impl Program {
 
     /// Builds a nested sequence of instructions between two parentheses
     fn build_sequence(&mut self) -> Sequence {
-        let mut parenthetic_sequence : Vec<SequenceElement> = Vec::new();
+        let mut parenthetic_sequence: Vec<SequenceElement> = Vec::new();
 
         loop {
             match self.fetch_instruction() {
                 Some(valid_instruction) => {
                     match valid_instruction {
-                        JumpForward =>  {
-                            let nested_sequence : Sequence = self.build_sequence();
+                        JumpForward => {
+                            let nested_sequence: Sequence = self.build_sequence();
                             parenthetic_sequence.push(SequenceElement::Sequence(nested_sequence));
+                        }
+                        JumpBackward => return {
+                            parenthetic_sequence
                         },
-                        JumpBackward => return parenthetic_sequence,
                         _ => parenthetic_sequence.push(SequenceElement::Instruction(valid_instruction))
                     }
-                },
+                }
                 // End of program has been reached
                 None => return parenthetic_sequence
             }
@@ -188,7 +225,7 @@ impl Program {
         } else {
             // Hold sequence
             // Recursively execute and check
-            let sequence : Sequence = self.build_sequence();
+            let sequence: Sequence = self.build_sequence();
             while self.cells[self.data_pointer] != 0 {
                 self.execute_sequence(&sequence)
             }
@@ -219,7 +256,7 @@ fn main() -> std::io::Result<()> {
     let data_pointer: usize = 0;
     let buf_reader: BufReader<File> = BufReader::new(file);
 
-    let mut program = Program{  cells, data_pointer, byte_iterator: buf_reader.bytes() };
+    let mut program = Program { cells, data_pointer, byte_iterator: buf_reader.bytes() };
 
     // Begin interpretation of the program
     program.interpret();
